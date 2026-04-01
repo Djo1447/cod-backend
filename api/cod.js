@@ -45,7 +45,6 @@ export default async function handler(req, res) {
       const orderPayload = {
         order: {
           line_items: [{ variant_id: parseInt(variantId), quantity: 1 }],
-          customer: { first_name: firstName, last_name: lastName, phone: phone },
           shipping_address: {
             first_name: firstName, last_name: lastName,
             address1: address, phone: phone,
