@@ -1,3 +1,4 @@
+// v2 - with CAPI
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
@@ -8,10 +9,9 @@ export default async function handler(req, res) {
   const SHOPIFY_KEY    = process.env.SHOPIFY_API_KEY;
   const SHOPIFY_SECRET = process.env.SHOPIFY_API_SECRET;
   const SHOPIFY_TOKEN  = process.env.SHOPIFY_TOKEN;
-  const FB_PIXEL_ID    = process.env.FB_PIXEL_ID;    // add 929200526728919 in Vercel
+  const FB_PIXEL_ID    = process.env.FB_PIXEL_ID;
   const FB_CAPI_TOKEN  = process.env.FB_CAPI_TOKEN;
 
-  // ─── OAuth: get access token ───────────────────────────────────────────────
   if (req.method === 'GET') {
     const { code } = req.query;
     if (!code) return res.status(400).json({ error: 'No code' });
@@ -26,7 +26,6 @@ export default async function handler(req, res) {
     } catch(e) { return res.status(500).json({ error: e.message }); }
   }
 
-  // ─── Create COD order ──────────────────────────────────────────────────────
   if (req.method === 'POST') {
     if (!SHOPIFY_TOKEN) return res.status(500).json({ success: false, error: 'No SHOPIFY_TOKEN' });
 
@@ -37,20 +36,17 @@ export default async function handler(req, res) {
       }
       if (!body || typeof body !== 'object') body = {};
 
-      // ── Customer fields
       const name      = body.name    || '';
       const phone     = body.phone   || '';
       const address   = body.address || '';
       const variantId = body.variantId;
       const price     = body.price   || 0;
 
-      // ── Validate required fields
       if (!variantId)    return res.status(400).json({ success: false, error: 'Missing variantId' });
       if (!name.trim())  return res.status(400).json({ success: false, error: 'Missing name' });
       if (!phone.trim()) return res.status(400).json({ success: false, error: 'Missing phone' });
       if (!address.trim()) return res.status(400).json({ success: false, error: 'Missing address' });
 
-      // ── UTM & tracking fields
       const utmSource   = body.utm_source   || '';
       const utmMedium   = body.utm_medium   || '';
       const utmCampaign = body.utm_campaign || '';
@@ -65,9 +61,7 @@ export default async function handler(req, res) {
       const parts     = name.trim().split(' ');
       const firstName = parts[0] || 'Client';
       const lastName  = parts.slice(1).join(' ') || '-';
-
-      // ── Total in TND (price from Shopify is in millimes x10)
-      const totalTND = ((price / 100) + 7).toFixed(3);
+      const totalTND  = ((price / 100) + 7).toFixed(3);
 
       const orderPayload = {
         order: {
@@ -107,7 +101,6 @@ export default async function handler(req, res) {
         }
       };
 
-      // ── Create Shopify order
       const shopifyRes = await fetch(
         `https://${SHOPIFY_STORE}/admin/api/2025-01/orders.json`,
         {
@@ -123,7 +116,8 @@ export default async function handler(req, res) {
       const data = await shopifyRes.json();
       if (!shopifyRes.ok) throw new Error(JSON.stringify(data.errors));
 
-      // ── Fire Facebook Conversions API (CAPI) server-side
+      // ── Facebook CAPI with logging
+      console.log('CAPI check - pixel:', FB_PIXEL_ID, 'token exists:', !!FB_CAPI_TOKEN);
       if (FB_PIXEL_ID && FB_CAPI_TOKEN) {
         const capiPayload = {
           data: [{
@@ -146,7 +140,6 @@ export default async function handler(req, res) {
           }]
         };
 
-        // Fire and forget — does not block the order response
         fetch(
           `https://graph.facebook.com/v19.0/${FB_PIXEL_ID}/events?access_token=${FB_CAPI_TOKEN}`,
           {
@@ -154,10 +147,14 @@ export default async function handler(req, res) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(capiPayload)
           }
-        ).catch(e => console.error('CAPI error:', e.message));
+        )
+        .then(r => r.json())
+        .then(d => console.log('CAPI response:', JSON.stringify(d)))
+        .catch(e => console.error('CAPI error:', e.message));
+      } else {
+        console.log('CAPI skipped - missing pixel or token');
       }
 
-      
       return res.status(200).json({
         success: true,
         orderId: data.order.id,
