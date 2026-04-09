@@ -8,6 +8,8 @@ export default async function handler(req, res) {
   const SHOPIFY_KEY    = process.env.SHOPIFY_API_KEY;
   const SHOPIFY_SECRET = process.env.SHOPIFY_API_SECRET;
   const SHOPIFY_TOKEN  = process.env.SHOPIFY_TOKEN;
+  const FB_PIXEL_ID    = process.env.FB_PIXEL_ID;    // add 929200526728919 in Vercel
+  const FB_CAPI_TOKEN  = process.env.FB_CAPI_TOKEN;
 
   // ─── OAuth: get access token ───────────────────────────────────────────────
   if (req.method === 'GET') {
@@ -40,14 +42,15 @@ export default async function handler(req, res) {
       const phone     = body.phone   || '';
       const address   = body.address || '';
       const variantId = body.variantId;
+      const price     = body.price   || 0;
 
       // ── Validate required fields
-      if (!variantId)  return res.status(400).json({ success: false, error: 'Missing variantId' });
-      if (!name.trim()) return res.status(400).json({ success: false, error: 'Missing name' });
+      if (!variantId)    return res.status(400).json({ success: false, error: 'Missing variantId' });
+      if (!name.trim())  return res.status(400).json({ success: false, error: 'Missing name' });
       if (!phone.trim()) return res.status(400).json({ success: false, error: 'Missing phone' });
       if (!address.trim()) return res.status(400).json({ success: false, error: 'Missing address' });
 
-      // ── UTM & tracking fields (sent from frontend)
+      // ── UTM & tracking fields
       const utmSource   = body.utm_source   || '';
       const utmMedium   = body.utm_medium   || '';
       const utmCampaign = body.utm_campaign || '';
@@ -56,10 +59,15 @@ export default async function handler(req, res) {
       const utmTerm     = body.utm_term     || '';
       const fullUrl     = body.full_url     || '';
       const cartToken   = body.cart_token   || '';
+      const fbp         = body.fbp          || '';
+      const fbc         = body.fbc          || '';
 
       const parts     = name.trim().split(' ');
       const firstName = parts[0] || 'Client';
       const lastName  = parts.slice(1).join(' ') || '-';
+
+      // ── Total in TND (price from Shopify is in millimes x10)
+      const totalTND = ((price / 100) + 7).toFixed(3);
 
       const orderPayload = {
         order: {
@@ -83,24 +91,23 @@ export default async function handler(req, res) {
           financial_status: 'pending',
           tags: 'COD',
           note: `COD Order\nName: ${name}\nPhone: ${phone}\nAddress: ${address}`,
-
-          // ── This fills the right block in your Shopify order page
           note_attributes: [
-            { name: 'رقم الهاتف',          value: phone },
-            { name: 'العنوان',              value: address },
-            { name: 'country',              value: 'TN' },
-            { name: 'utm_source',           value: utmSource },
-            { name: 'utm_medium',           value: utmMedium },
-            { name: 'utm_campaign',         value: utmCampaign },
-            { name: 'utm_id',               value: utmId },
-            { name: 'utm_content',          value: utmContent },
-            { name: 'utm_term',             value: utmTerm },
-            { name: 'full_url',             value: fullUrl },
-            { name: 'shopify-cart-token',   value: cartToken }
+            { name: 'رقم الهاتف',        value: phone },
+            { name: 'العنوان',            value: address },
+            { name: 'country',            value: 'TN' },
+            { name: 'utm_source',         value: utmSource },
+            { name: 'utm_medium',         value: utmMedium },
+            { name: 'utm_campaign',       value: utmCampaign },
+            { name: 'utm_id',             value: utmId },
+            { name: 'utm_content',        value: utmContent },
+            { name: 'utm_term',           value: utmTerm },
+            { name: 'full_url',           value: fullUrl },
+            { name: 'shopify-cart-token', value: cartToken }
           ]
         }
       };
 
+      // ── Create Shopify order
       const shopifyRes = await fetch(
         `https://${SHOPIFY_STORE}/admin/api/2025-01/orders.json`,
         {
@@ -115,6 +122,40 @@ export default async function handler(req, res) {
 
       const data = await shopifyRes.json();
       if (!shopifyRes.ok) throw new Error(JSON.stringify(data.errors));
+
+      // ── Fire Facebook Conversions API (CAPI) server-side
+      if (FB_PIXEL_ID && FB_CAPI_TOKEN) {
+        const capiPayload = {
+          data: [{
+            event_name: 'Purchase',
+            event_time: Math.floor(Date.now() / 1000),
+            event_source_url: fullUrl || `https://${SHOPIFY_STORE}`,
+            action_source: 'website',
+            user_data: {
+              ph: [phone],
+              ...(fbp && { fbp }),
+              ...(fbc && { fbc })
+            },
+            custom_data: {
+              currency: 'TND',
+              value: parseFloat(totalTND),
+              content_type: 'product',
+              content_ids: [String(variantId)],
+              order_id: String(data.order.id)
+            }
+          }]
+        };
+
+        // Fire and forget — does not block the order response
+        fetch(
+          `https://graph.facebook.com/v19.0/${FB_PIXEL_ID}/events?access_token=${FB_CAPI_TOKEN}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(capiPayload)
+          }
+        ).catch(e => console.error('CAPI error:', e.message));
+      }
 
       return res.status(200).json({
         success: true,
