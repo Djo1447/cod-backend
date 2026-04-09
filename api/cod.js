@@ -9,6 +9,7 @@ export default async function handler(req, res) {
   const SHOPIFY_SECRET = process.env.SHOPIFY_API_SECRET;
   const SHOPIFY_TOKEN  = process.env.SHOPIFY_TOKEN;
 
+  // ─── OAuth: get access token ───────────────────────────────────────────────
   if (req.method === 'GET') {
     const { code } = req.query;
     if (!code) return res.status(400).json({ error: 'No code' });
@@ -23,8 +24,10 @@ export default async function handler(req, res) {
     } catch(e) { return res.status(500).json({ error: e.message }); }
   }
 
+  // ─── Create COD order ──────────────────────────────────────────────────────
   if (req.method === 'POST') {
     if (!SHOPIFY_TOKEN) return res.status(500).json({ success: false, error: 'No SHOPIFY_TOKEN' });
+
     try {
       let body = req.body;
       if (typeof body === 'string') {
@@ -32,25 +35,41 @@ export default async function handler(req, res) {
       }
       if (!body || typeof body !== 'object') body = {};
 
-      const name = body.name || '';
-      const phone = body.phone || '';
-      const address = body.address || '';
+      // ── Customer fields
+      const name      = body.name    || '';
+      const phone     = body.phone   || '';
+      const address   = body.address || '';
       const variantId = body.variantId;
-      const price = body.price || 0;
 
-      const parts = name.trim().split(' ');
+      // ── Validate required fields
+      if (!variantId)  return res.status(400).json({ success: false, error: 'Missing variantId' });
+      if (!name.trim()) return res.status(400).json({ success: false, error: 'Missing name' });
+      if (!phone.trim()) return res.status(400).json({ success: false, error: 'Missing phone' });
+      if (!address.trim()) return res.status(400).json({ success: false, error: 'Missing address' });
+
+      // ── UTM & tracking fields (sent from frontend)
+      const utmSource   = body.utm_source   || '';
+      const utmMedium   = body.utm_medium   || '';
+      const utmCampaign = body.utm_campaign || '';
+      const utmId       = body.utm_id       || '';
+      const utmContent  = body.utm_content  || '';
+      const utmTerm     = body.utm_term     || '';
+      const fullUrl     = body.full_url     || '';
+      const cartToken   = body.cart_token   || '';
+
+      const parts     = name.trim().split(' ');
       const firstName = parts[0] || 'Client';
-      const lastName = parts.slice(1).join(' ') || '-';
+      const lastName  = parts.slice(1).join(' ') || '-';
 
       const orderPayload = {
         order: {
           line_items: [{ variant_id: parseInt(variantId), quantity: 1 }],
-shipping_lines: [{
-  title: 'التوصيل',
-  price: '7.00',
-  code: 'COD_DELIVERY',
-  source: 'farhat_store'
-}],
+          shipping_lines: [{
+            title: 'التوصيل',
+            price: process.env.SHIPPING_PRICE || '7.00',
+            code: 'COD_DELIVERY',
+            source: 'farhat_store'
+          }],
           shipping_address: {
             first_name: firstName, last_name: lastName,
             address1: address, phone: phone,
@@ -63,12 +82,27 @@ shipping_lines: [{
           },
           financial_status: 'pending',
           tags: 'COD',
-          note: `COD Order\nName: ${name}\nPhone: ${phone}\nAddress: ${address}`
+          note: `COD Order\nName: ${name}\nPhone: ${phone}\nAddress: ${address}`,
+
+          // ── This fills the right block in your Shopify order page
+          note_attributes: [
+            { name: 'رقم الهاتف',          value: phone },
+            { name: 'العنوان',              value: address },
+            { name: 'country',              value: 'TN' },
+            { name: 'utm_source',           value: utmSource },
+            { name: 'utm_medium',           value: utmMedium },
+            { name: 'utm_campaign',         value: utmCampaign },
+            { name: 'utm_id',               value: utmId },
+            { name: 'utm_content',          value: utmContent },
+            { name: 'utm_term',             value: utmTerm },
+            { name: 'full_url',             value: fullUrl },
+            { name: 'shopify-cart-token',   value: cartToken }
+          ]
         }
       };
 
       const shopifyRes = await fetch(
-        `https://${SHOPIFY_STORE}/admin/api/2024-01/orders.json`,
+        `https://${SHOPIFY_STORE}/admin/api/2025-01/orders.json`,
         {
           method: 'POST',
           headers: {
