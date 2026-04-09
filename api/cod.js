@@ -1,4 +1,4 @@
-// v2 - with CAPI
+// v3 - CAPI awaited
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
@@ -42,9 +42,9 @@ export default async function handler(req, res) {
       const variantId = body.variantId;
       const price     = body.price   || 0;
 
-      if (!variantId)    return res.status(400).json({ success: false, error: 'Missing variantId' });
-      if (!name.trim())  return res.status(400).json({ success: false, error: 'Missing name' });
-      if (!phone.trim()) return res.status(400).json({ success: false, error: 'Missing phone' });
+      if (!variantId)      return res.status(400).json({ success: false, error: 'Missing variantId' });
+      if (!name.trim())    return res.status(400).json({ success: false, error: 'Missing name' });
+      if (!phone.trim())   return res.status(400).json({ success: false, error: 'Missing phone' });
       if (!address.trim()) return res.status(400).json({ success: false, error: 'Missing address' });
 
       const utmSource   = body.utm_source   || '';
@@ -101,6 +101,7 @@ export default async function handler(req, res) {
         }
       };
 
+      // ── Create Shopify order
       const shopifyRes = await fetch(
         `https://${SHOPIFY_STORE}/admin/api/2025-01/orders.json`,
         {
@@ -116,43 +117,43 @@ export default async function handler(req, res) {
       const data = await shopifyRes.json();
       if (!shopifyRes.ok) throw new Error(JSON.stringify(data.errors));
 
-      // ── Facebook CAPI with logging
-      console.log('CAPI check - pixel:', FB_PIXEL_ID, 'token exists:', !!FB_CAPI_TOKEN);
+      // ── Facebook CAPI — awaited so Vercel doesn't kill it
       if (FB_PIXEL_ID && FB_CAPI_TOKEN) {
-        const capiPayload = {
-          data: [{
-            event_name: 'Purchase',
-            event_time: Math.floor(Date.now() / 1000),
-            event_source_url: fullUrl || `https://${SHOPIFY_STORE}`,
-            action_source: 'website',
-            user_data: {
-              ph: [phone],
-              ...(fbp && { fbp }),
-              ...(fbc && { fbc })
-            },
-            custom_data: {
-              currency: 'TND',
-              value: parseFloat(totalTND),
-              content_type: 'product',
-              content_ids: [String(variantId)],
-              order_id: String(data.order.id)
-            }
-          }]
-        };
+        try {
+          const capiPayload = {
+            data: [{
+              event_name: 'Purchase',
+              event_time: Math.floor(Date.now() / 1000),
+              event_source_url: fullUrl || `https://${SHOPIFY_STORE}`,
+              action_source: 'website',
+              user_data: {
+                ph: [phone],
+                ...(fbp && { fbp }),
+                ...(fbc && { fbc })
+              },
+              custom_data: {
+                currency: 'TND',
+                value: parseFloat(totalTND),
+                content_type: 'product',
+                content_ids: [String(variantId)],
+                order_id: String(data.order.id)
+              }
+            }]
+          };
 
-        fetch(
-          `https://graph.facebook.com/v19.0/${FB_PIXEL_ID}/events?access_token=${FB_CAPI_TOKEN}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(capiPayload)
-          }
-        )
-        .then(r => r.json())
-        .then(d => console.log('CAPI response:', JSON.stringify(d)))
-        .catch(e => console.error('CAPI error:', e.message));
-      } else {
-        console.log('CAPI skipped - missing pixel or token');
+          const capiRes = await fetch(
+            `https://graph.facebook.com/v19.0/${FB_PIXEL_ID}/events?access_token=${FB_CAPI_TOKEN}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(capiPayload)
+            }
+          );
+          const capiData = await capiRes.json();
+          console.log('CAPI response:', JSON.stringify(capiData));
+        } catch(e) {
+          console.error('CAPI error:', e.message);
+        }
       }
 
       return res.status(200).json({
