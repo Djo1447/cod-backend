@@ -1,4 +1,10 @@
-// v3 - CAPI awaited
+// v4 - CAPI with hashed user data
+import crypto from 'crypto';
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(value.trim().toLowerCase()).digest('hex');
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
@@ -101,7 +107,6 @@ export default async function handler(req, res) {
         }
       };
 
-      // ── Create Shopify order
       const shopifyRes = await fetch(
         `https://${SHOPIFY_STORE}/admin/api/2025-01/orders.json`,
         {
@@ -117,7 +122,7 @@ export default async function handler(req, res) {
       const data = await shopifyRes.json();
       if (!shopifyRes.ok) throw new Error(JSON.stringify(data.errors));
 
-      // ── Facebook CAPI — awaited so Vercel doesn't kill it
+      // ── Facebook CAPI with hashed user data
       if (FB_PIXEL_ID && FB_CAPI_TOKEN) {
         try {
           const capiPayload = {
@@ -127,7 +132,7 @@ export default async function handler(req, res) {
               event_source_url: fullUrl || `https://${SHOPIFY_STORE}`,
               action_source: 'website',
               user_data: {
-                ph: [phone],
+                ph: [sha256(phone)],
                 ...(fbp && { fbp }),
                 ...(fbc && { fbc })
               },
