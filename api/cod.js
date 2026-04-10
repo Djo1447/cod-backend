@@ -73,8 +73,8 @@ export default async function handler(req, res) {
         order: {
           line_items: [{ variant_id: parseInt(variantId), quantity: 1 }],
           shipping_lines: [{
-            title: 'التوصيل',
-            price: process.env.SHIPPING_PRICE || '7.00',
+            title: 'توصيل بلاش',
+            price: '0.00',
             code: 'COD_DELIVERY',
             source: 'farhat_store'
           }],
