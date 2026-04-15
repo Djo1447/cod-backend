@@ -66,15 +66,14 @@ export default async function handler(req, res) {
 
       const parts     = name.trim().split(' ');
       const firstName = parts[0] || 'Client';
-      const lastName  = parts.slice(1).join(' ') || '';
+      const lastName  = parts.slice(1).join(' ') || '.';
       const totalTND  = ((price / 100) + 7).toFixed(3);
 
       const orderPayload = {
         order: {
           customer: {
             first_name: firstName,
-            last_name: lastName,
-            phone: phone
+            last_name: lastName
           },
           line_items: [{ variant_id: parseInt(variantId), quantity: 1 }],
           shipping_lines: [{
