@@ -66,7 +66,7 @@ export default async function handler(req, res) {
 
       const parts     = name.trim().split(' ');
       const firstName = parts[0] || 'Client';
-      const lastName  = parts.slice(1).join(' ') || '.';
+      const lastName  = parts.slice(1).join(' ') || '';
       const totalTND  = ((price / 100) + 7).toFixed(3);
 
       const orderPayload = {
