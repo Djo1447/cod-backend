@@ -48,6 +48,7 @@ export default async function handler(req, res) {
       const variantId = body.variantId;
       const price     = body.price   || 0;
       const quantity  = body.quantity || 1;
+      const color     = body.color || '';
 
       if (!variantId)      return res.status(400).json({ success: false, error: 'Missing variantId' });
       if (!name.trim())    return res.status(400).json({ success: false, error: 'Missing name' });
@@ -100,6 +101,7 @@ export default async function handler(req, res) {
             { name: 'رقم الهاتف',        value: phone },
             { name: 'العنوان',            value: address },
             { name: 'quantity',           value: String(quantity) },
+                        { name: 'اللون',              value: color },
             { name: 'country',            value: 'TN' },
             { name: 'utm_source',         value: utmSource },
             { name: 'utm_medium',         value: utmMedium },
