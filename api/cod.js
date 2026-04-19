@@ -47,6 +47,7 @@ export default async function handler(req, res) {
       const address   = body.address || '';
       const variantId = body.variantId;
       const price     = body.price   || 0;
+      const quantity  = body.quantity || 1;
 
       if (!variantId)      return res.status(400).json({ success: false, error: 'Missing variantId' });
       if (!name.trim())    return res.status(400).json({ success: false, error: 'Missing name' });
@@ -67,7 +68,7 @@ export default async function handler(req, res) {
       const parts     = name.trim().split(' ');
       const firstName = parts[0] || 'Client';
       const lastName  = parts.slice(1).join(' ') || '.';
-      const totalTND  = ((price / 100) + 7).toFixed(3);
+      const totalTND  = (price / 100).toFixed(3);
 
       const orderPayload = {
         order: {
@@ -75,7 +76,7 @@ export default async function handler(req, res) {
             first_name: firstName,
             last_name: lastName
           },
-          line_items: [{ variant_id: parseInt(variantId), quantity: 1 }],
+          line_items: [{ variant_id: parseInt(variantId), quantity: parseInt(quantity) }],
           shipping_lines: [{
             title: 'توصيل بلاش',
             price: '0.00',
@@ -94,10 +95,11 @@ export default async function handler(req, res) {
           },
           financial_status: 'pending',
           tags: 'COD',
-          note: `COD Order\nName: ${name}\nPhone: ${phone}\nAddress: ${address}`,
+          note: `COD Order\nName: ${name}\nPhone: ${phone}\nAddress: ${address}\nQuantity: ${quantity}`,
           note_attributes: [
             { name: 'رقم الهاتف',        value: phone },
             { name: 'العنوان',            value: address },
+            { name: 'quantity',           value: String(quantity) },
             { name: 'country',            value: 'TN' },
             { name: 'utm_source',         value: utmSource },
             { name: 'utm_medium',         value: utmMedium },
