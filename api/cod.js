@@ -204,9 +204,9 @@ export default async function handler(req, res) {
             last_name: lastName || '.'
           },
           line_items: [{ variant_id: parseInt(variantId), quantity: parseInt(quantity) }],
-                    shipping_lines: [{
-            title: 'توصيل بلاش',
-            price: '0.00',
+                              shipping_lines: [{
+            title: body.paid_delivery ? 'التوصيل' : 'توصيل بلاش',
+            price: body.paid_delivery ? '7.00' : '0.00',
             code: 'COD_DELIVERY',
             source: 'farhat_store'
           }],
