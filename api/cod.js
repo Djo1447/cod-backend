@@ -204,7 +204,7 @@ export default async function handler(req, res) {
             last_name: lastName || '.'
           },
           line_items: [{ variant_id: parseInt(variantId), quantity: parseInt(quantity) }],
-          shipping_lines: [{
+                    shipping_lines: [{
             title: 'توصيل بلاش',
             price: '0.00',
             code: 'COD_DELIVERY',
