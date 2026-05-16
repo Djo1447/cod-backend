@@ -21,69 +21,82 @@ export default async function handler(req, res) {
 
     console.log('Validating code:', code, '| store:', SHOPIFY_STORE, '| cart_price:', cartPrice);
 
-    // Step 1: lookup discount code
-    const lookupRes = await fetch(
-      `https://${SHOPIFY_STORE}/admin/api/2025-01/discount_codes/lookup.json?code=${encodeURIComponent(code)}`,
-      { headers: { 'X-Shopify-Access-Token': SHOPIFY_TOKEN, 'Content-Type': 'application/json' } }
-    );
+    // Search all price rules and find matching discount code
+    let foundRule = null;
+    let page = 1;
+    const limit = 250;
 
-    console.log('Shopify lookup status:', lookupRes.status);
-    const responseText = await lookupRes.text();
-    console.log('Shopify lookup response:', responseText);
+    while (true) {
+      const rulesRes = await fetch(
+        `https://${SHOPIFY_STORE}/admin/api/2025-01/price_rules.json?limit=${limit}`,
+        { headers: { 'X-Shopify-Access-Token': SHOPIFY_TOKEN, 'Content-Type': 'application/json' } }
+      );
 
-    if (!lookupRes.ok) return res.status(200).json({ valid: false, error: 'Code not found' });
+      console.log('Price rules status:', rulesRes.status);
+      if (!rulesRes.ok) {
+        const errText = await rulesRes.text();
+        console.log('Price rules error:', errText);
+        return res.status(200).json({ valid: false, error: 'Cannot fetch price rules' });
+      }
 
-    let discountData;
-    try { discountData = JSON.parse(responseText); } catch(e) { return res.status(200).json({ valid: false, error: 'Parse error' }); }
+      const { price_rules } = await rulesRes.json();
+      console.log('Found', price_rules.length, 'price rules');
 
-    const discount_code = discountData.discount_code;
-    if (!discount_code) return res.status(200).json({ valid: false, error: 'Code not found' });
+      for (const rule of price_rules) {
+        // Get discount codes for this rule
+        const codesRes = await fetch(
+          `https://${SHOPIFY_STORE}/admin/api/2025-01/price_rules/${rule.id}/discount_codes.json`,
+          { headers: { 'X-Shopify-Access-Token': SHOPIFY_TOKEN, 'Content-Type': 'application/json' } }
+        );
+        if (!codesRes.ok) continue;
 
-    console.log('Found discount_code:', JSON.stringify(discount_code));
+        const { discount_codes } = await codesRes.json();
+        const match = discount_codes.find(dc => dc.code.toUpperCase() === code);
 
-    // Step 2: get price rule
-    const ruleRes = await fetch(
-      `https://${SHOPIFY_STORE}/admin/api/2025-01/price_rules/${discount_code.price_rule_id}.json`,
-      { headers: { 'X-Shopify-Access-Token': SHOPIFY_TOKEN, 'Content-Type': 'application/json' } }
-    );
+        if (match) {
+          console.log('Found match! Rule:', rule.id, 'Code:', match.code, 'Usage:', match.usage_count);
+          foundRule = { rule, discountCode: match };
+          break;
+        }
+      }
 
-    console.log('Price rule status:', ruleRes.status);
-    const ruleText = await ruleRes.text();
-    console.log('Price rule response:', ruleText);
+      if (foundRule || price_rules.length < limit) break;
+      page++;
+    }
 
-    if (!ruleRes.ok) return res.status(200).json({ valid: false, error: 'Rule not found' });
+    if (!foundRule) {
+      console.log('Code not found in any price rule');
+      return res.status(200).json({ valid: false, error: 'Code not found' });
+    }
 
-    let ruleData;
-    try { ruleData = JSON.parse(ruleText); } catch(e) { return res.status(200).json({ valid: false, error: 'Rule parse error' }); }
+    const { rule, discountCode } = foundRule;
+    const now = new Date();
 
-    const rule = ruleData.price_rule;
-    const now  = new Date();
-
-    // Step 3: validity checks
+    // Validity checks
     if (rule.ends_at && new Date(rule.ends_at) < now)
       return res.status(200).json({ valid: false, error: 'Code expired' });
     if (rule.starts_at && new Date(rule.starts_at) > now)
       return res.status(200).json({ valid: false, error: 'Code not active yet' });
-    if (rule.usage_limit !== null && discount_code.usage_count >= rule.usage_limit)
+    if (rule.usage_limit !== null && discountCode.usage_count >= rule.usage_limit)
       return res.status(200).json({ valid: false, error: 'Usage limit reached' });
 
     console.log('Rule value_type:', rule.value_type, '| value:', rule.value);
 
-    // Step 4: calculate amount in millimes
+    // Calculate discount amount in millimes
     const value = Math.abs(parseFloat(rule.value));
     let amount  = 0;
 
     if (rule.value_type === 'percentage') {
       amount = Math.round(cartPrice * value / 100);
-      console.log('Percent discount:', value, '% | amount:', amount, 'millimes');
+      console.log('Percent:', value, '% | amount:', amount, 'millimes');
       return res.status(200).json({ valid: true, type: 'percent', value, amount });
     } else if (rule.value_type === 'fixed_amount') {
       amount = Math.round(value * 1000);
-      console.log('Fixed discount:', value, 'TND | amount:', amount, 'millimes');
+      console.log('Fixed:', value, 'TND | amount:', amount, 'millimes');
       return res.status(200).json({ valid: true, type: 'fixed', amount });
     }
 
-    return res.status(200).json({ valid: false, error: 'Unsupported discount type: ' + rule.value_type });
+    return res.status(200).json({ valid: false, error: 'Unsupported type: ' + rule.value_type });
 
   } catch(e) {
     console.error('validate-coupon error:', e.message);
