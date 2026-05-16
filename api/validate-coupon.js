@@ -91,7 +91,7 @@ export default async function handler(req, res) {
       console.log('Percent:', value, '% | amount:', amount, 'millimes');
       return res.status(200).json({ valid: true, type: 'percent', value, amount });
     } else if (rule.value_type === 'fixed_amount') {
-      amount = Math.round(value * 1000);
+      amount = Math.round(value * 100);
       console.log('Fixed:', value, 'TND | amount:', amount, 'millimes');
       return res.status(200).json({ valid: true, type: 'fixed', amount });
     }
