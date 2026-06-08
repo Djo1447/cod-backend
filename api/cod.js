@@ -155,7 +155,7 @@ export default async function handler(req, res) {
       const orderPayload = {
         order: {
           customer: { first_name: firstName || 'Client', last_name: lastName || '.' },
-          line_items: [{ variant_id: parseInt(variantId), quantity: parseInt(quantity), price: (productPriceCents / quantity / 100).toFixed(3) }],
+          line_items: [{ variant_id: parseInt(variantId), quantity: parseInt(quantity), price: (price / 100).toFixed(3) }],
           shipping_lines: [{
             title: body.paid_delivery ? 'التوصيل' : 'توصيل بلاش',
             price: body.paid_delivery ? '5.000' : '0.000',
