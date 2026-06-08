@@ -158,7 +158,7 @@ export default async function handler(req, res) {
           line_items: [{ variant_id: parseInt(variantId), quantity: parseInt(quantity), price: (price / 100).toFixed(3) }],
           shipping_lines: [{
             title: body.paid_delivery ? 'التوصيل' : 'توصيل بلاش',
-            price: body.paid_delivery ? '5.000' : '0.000',
+            price: body.paid_delivery ? '7.000' : '0.000',
             code: 'COD_DELIVERY', source: 'farhat_store'
           }],
           shipping_address: {
