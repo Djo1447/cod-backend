@@ -88,7 +88,7 @@ module.exports = async function handler(req, res) {
       const quantity       = body.quantity || 1;
       const color          = body.color || '';
       const discountCode   = body.discount_code   || '';
-      const discountAmount = parseInt(body.discount_amount) || 0; // millimes
+      const discountAmount = parseInt(body.discount_amount) || 0;
       const utmSource      = body.utm_source   || '';
       const utmMedium      = body.utm_medium   || '';
       const utmCampaign    = body.utm_campaign || '';
@@ -152,11 +152,12 @@ module.exports = async function handler(req, res) {
       if (!phone.trim())   return res.status(400).json({ success: false, error: 'Missing phone' });
       if (!address.trim()) return res.status(400).json({ success: false, error: 'Missing address' });
 
+      const unitPrice = (price / 100 / parseInt(quantity)).toFixed(3);
+
       const orderPayload = {
         order: {
           customer: { first_name: firstName || 'Client', last_name: lastName || '.' },
-          line_items: [{ 
-  line_items: [{ variant_id: parseInt(variantId), quantity: parseInt(quantity), price: (price / 100 / parseInt(quantity)).toFixed(3) }],
+          line_items: [{ variant_id: parseInt(variantId), quantity: parseInt(quantity), price: unitPrice }],
           shipping_lines: [{
             title: body.paid_delivery ? 'التوصيل' : 'توصيل بلاش',
             price: body.paid_delivery ? '7.000' : '0.000',
