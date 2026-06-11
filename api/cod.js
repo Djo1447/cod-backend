@@ -1,5 +1,10 @@
-// v6 - Full CAPI + Discount Code support
+// v7 - Full CAPI + Discount Code support + Phone blocklist
 const crypto = require('crypto');
+
+// ─── BLOCKED PHONES ───────────────────────────────────────────────────────────
+// Add raw (8-digit) or full international format — both are checked.
+const BLOCKED_PHONES = ['97672011', '21697672011'];
+// ─────────────────────────────────────────────────────────────────────────────
 
 function sha256(value) {
   if (!value) return null;
@@ -16,6 +21,13 @@ function normalizePhone(phone) {
 
 function generateEventId() {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+}
+
+function isBlockedPhone(phone) {
+  if (!phone) return false;
+  const raw        = String(phone).replace(/\D/g, '');
+  const normalized = normalizePhone(phone); // e.g. "21697672011"
+  return BLOCKED_PHONES.includes(raw) || BLOCKED_PHONES.includes(normalized);
 }
 
 async function sendCAPIEvent({ eventName, eventId, userData, customData, eventSourceUrl, pixelId, accessToken }) {
@@ -108,6 +120,21 @@ module.exports = async function handler(req, res) {
       const firstName = parts[0] || '';
       const lastName  = parts.slice(1).join(' ') || '';
       const normalizedPhone = normalizePhone(phone);
+
+      // ─── PHONE BLOCK CHECK ─────────────────────────────────────────────────
+      // Silently fake a successful order — no Shopify order, no Meta CAPI event.
+      if (isBlockedPhone(phone)) {
+        console.log(`[BLOCKED] Phone ${phone} attempted an order — silently dropped.`);
+        const fakeEventId = eventIdFromClient || generateEventId();
+        const fakeOrderId = Math.floor(Math.random() * 9000000) + 1000000;
+        return res.status(200).json({
+          success:    true,
+          orderId:    fakeOrderId,
+          orderName: `#${fakeOrderId}`,
+          event_id:   fakeEventId
+        });
+      }
+      // ───────────────────────────────────────────────────────────────────────
 
       const userData = {
         ...(normalizedPhone && { ph: [sha256(normalizedPhone)] }),
