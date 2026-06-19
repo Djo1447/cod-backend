@@ -1,14 +1,15 @@
-// v7 - Full CAPI + Discount Code support + Phone blocklist
+// v8 - Full CAPI + Discount Code support + Phone blocklist + IP tracking
 const crypto = require('crypto');
 
 // ─── BLOCKED PHONES ───────────────────────────────────────────────────────────
 // Add raw (8-digit) or full international format — both are checked.
 const BLOCKED_PHONES = [
-  '97672011', '21697672011',
-  '27771006', '21627771006',
-  '26926306', '21626926306',
-  '92014175', '21692014175',
-  '97229014', '21697229014'
+  // — original —
+  '97672011',  '21697672011',
+  '27771006',  '21627771006',
+  '26926306',  '21626926306',
+  '92014175',  '21692014175',
+  '97229014',  '21697229014',
   // — new —
   '53566115',  '21653566115',
   '52783689',  '21652783689',
@@ -235,7 +236,8 @@ module.exports = async function handler(req, res) {
             { name: 'utm_content',        value: utmContent },
             { name: 'utm_term',           value: utmTerm },
             { name: 'full_url',           value: fullUrl },
-            { name: 'shopify-cart-token', value: cartToken }
+            { name: 'shopify-cart-token', value: cartToken },
+            { name: 'client_ip',          value: clientIp || '' },
           ],
           ...(discountCode && discountAmount > 0 && {
             applied_discount: {
